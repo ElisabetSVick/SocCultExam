@@ -53,6 +53,7 @@ new <- df %>%
   )
 head(new)
 ```
+
 CHANGEPOINT DETECTION - TWEETS
 ```{r}
 #MEANS CONSIDERING VARIANCE - FEMALE
@@ -63,8 +64,9 @@ female <- c(mean = param.est(female_meanvar)$mean, # Return estimates
 plot(female_meanvar, main = "Female tweets")
 fem.est <- as.data.frame(female)
 
+
 #MEANS CONSIDERING VARIANCE - MALE
-male_meanvar = cpt.meanvar(new$male, method = "AMOC")
+male_meanvar = cpt.meanvar(new$male, method = "BinSeg", Q = 10)
 male <- c(mean = param.est(male_meanvar)$mean, # Return estimates
   cp = cpts(male_meanvar),
   variance = param.est(male_meanvar)$variance)
@@ -72,11 +74,11 @@ plot(male_meanvar, main = "Male tweets")
 hom.est <- as.data.frame(male)
 
 #MEANS CONSIDERING VARIANCE - ORGANISATIONS
-org_meanvar = cpt.meanvar(new$org, method = "AMOC")
+org_meanvar = cpt.meanvar(new$org, method = "BinSeg", Q = 10)
 organisation <- c(mean = param.est(org_meanvar)$mean, # Return estimates
   cp = cpts(org_meanvar),
   variance = param.est(org_meanvar)$variance)
-plot(org_meanvar, main = "Organisation's tweets")
+plot(org_meanvar, main = "Organisation tweets")
 org.est <- as.data.frame(organisation)
 
 summary <- data.frame(fem.est, hom.est, org.est)
@@ -91,6 +93,11 @@ subset$m_retweets <- c(ifelse(subset$retweets_count > 0.5 & subset$gender == "m"
 subset$f_retweets <- c(ifelse(subset$retweets_count > 0.5 & subset$gender == "f", subset$retweets_count, 0))
 subset$o_retweets <- c(ifelse(subset$retweets_count > 0.5 & subset$gender == "o", subset$retweets_count, 0))
 
+
+sum(subset$o_retweets)
+subset$f_retweets <- as.numeric(subset$f_retweets)
+
+
 # Rearranging data
 subset <- subset %>% 
   group_by(date) %>%
@@ -101,7 +108,7 @@ subset <- subset %>%
   )
 
 #MEANS CONSIDERING VARIANCE - FEMALE
-female_rt_meanvar = cpt.meanvar(subset$female, method = "BinSeg", Q = 3)
+female_rt_meanvar = cpt.meanvar(subset$female, method = "BinSeg", Q = 19)
 female_rt <- c(mean = param.est(female_rt_meanvar)$mean, # Return estimates
   cp = cpts(female_rt_meanvar),
   variance = param.est(female_rt_meanvar)$variance)
@@ -109,7 +116,7 @@ plot(female_rt_meanvar, main = "Females's retweets")
 female_rt_est <- as.data.frame(female_rt)
 
 #MEANS CONSIDERING VARIANCE - MALE
-male_rt_meanvar = cpt.meanvar(subset$male, method = "AMOC")
+male_rt_meanvar = cpt.meanvar(subset$male, method = "BinSeg", Q = 19)
 male_rt <- c(mean = param.est(male_rt_meanvar)$mean, # Return estimates
   cp = cpts(male_rt_meanvar),
   variance = param.est(male_rt_meanvar)$variance)
@@ -117,13 +124,81 @@ plot(male_rt_meanvar, main = "Males's retweets")
 male_rt_est <- as.data.frame(male_rt)
 
 #MEANS CONSIDERING VARIANCE - MALE
-org_rt_meanvar = cpt.meanvar(subset$org, method = "AMOC")
+org_rt_meanvar = cpt.meanvar(subset$org, method = "BinSeg", Q = 19)
 org_rt <- c(mean = param.est(org_rt_meanvar)$mean, # Return estimates
   cp = cpts(org_rt_meanvar),
   variance = param.est(org_rt_meanvar)$variance)
 plot(org_rt_meanvar, main = "Organizations's retweets")
 org_rt_est <- as.data.frame(org_rt)
 ```
+CHANGEPOINT DETECTION - LIKES
+```{r}
+likes <- subset(df, select = c("likes_count", "gender", "date"))
+
+likes$m_likes <- c(ifelse(likes$likes_count > 0.5 & likes$gender == "m", likes$likes_count, 0))
+likes$f_likes <- c(ifelse(likes$likes_count > 0.5 & likes$gender == "f", likes$likes_count, 0))
+likes$o_likes <- c(ifelse(likes$likes_count > 0.5 & likes$gender == "o", likes$likes_count, 0))
+
+
+sum(likes$o_likes)
+subset$f_retweets <- as.numeric(subset$f_retweets)
+
+
+#nu omarrangerer vi lige, så vi har én række pr dato
+likes <- likes %>% 
+  group_by(date) %>%
+  summarize(
+    female = sum(f_likes),
+    male = sum(m_likes),
+    org = sum(o_likes)
+  )
+
+#MEANS CONSIDERING VARIANCE - FEMALE
+female_likes_meanvar = cpt.meanvar(likes$female, method = "BinSeg", Q =19)
+female_likes <- c(mean = param.est(female_likes_meanvar)$mean, # Return estimates
+  cp = cpts(female_likes_meanvar),
+  variance = param.est(female_likes_meanvar)$variance)
+plot(female_likes_meanvar, main = "Females' likes")
+female_likes_est <- as.data.frame(female_likes)
+
+#MEANS CONSIDERING VARIANCE - MALE
+male_likes_meanvar = cpt.meanvar(likes$male, method = "BinSeg", Q =19)
+male_likes <- c(mean = param.est(male_likes_meanvar)$mean, # Return estimates
+  cp = cpts(male_likes_meanvar),
+  variance = param.est(male_likes_meanvar)$variance)
+plot(male_likes_meanvar, main = "Males' likes")
+male_likes_est <- as.data.frame(male_likes)
+
+#MEANS CONSIDERING VARIANCE - MALE
+org_likes_meanvar = cpt.meanvar(likes$org, method = "BinSeg", Q =19)
+org_likes <- c(mean = param.est(org_likes_meanvar)$mean, # Return estimates
+  cp = cpts(org_likes_meanvar),
+  variance = param.est(org_likes_meanvar)$variance)
+plot(org_likes_meanvar, main = "Organizations' likes")
+org_likes_est <- as.data.frame(org_likes)
+```
+
+ANOVA FOR COMPARISON
+```{r}
+pacman::p_load(compute.es, car, ggplot2, multcomp, pastecs, WRS)
+
+# Does frequency of tweets differ significantly between gender groups? 
+m_test <- lmerTest::lmer(Tweets ~ 1 + Gender + (1|Date), data = anovadata, REML = F)
+summary(m_test)
+anova(m_test)
+plot(m_test)
+
+#Same analysis as above, but different syntax
+anova <- aov(Tweets ~ Gender, data = anovadata)
+summary(anova)
+
+# Does mean of segment 1 differ significantly between gender groups?
+library(readr)
+segment_comparison <- read_delim("segment_comparison.csv",";")
+s_test <- lmerTest::lmer(Tweets ~ 1 + Gender + (1|Date), data = anovadata, REML = F)
+summary(m_test)
+```
+
 
 CHANGEPOINT DETECTION WITH BAYESIAN PACKAGE
 Note: Not very useful due to the small dataset and much variance
